@@ -21,7 +21,7 @@ jobs:
         run: npm run lint
 
   test:
-    needs: lint          # Optional: wait for lint to pass first
+             # Optional: wait for lint to pass first
     runs-on: ubuntu-latest
     steps:
       - name: Get code
