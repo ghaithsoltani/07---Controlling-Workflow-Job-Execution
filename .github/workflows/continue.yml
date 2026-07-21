@@ -1,75 +1,115 @@
-name: Contiue Website Deployment
+name: Continue Website Deployment
+# Trigger: run on every push to the main branch
 on:
   push:
     branches:
       - main
+
 jobs:
+  # ============================================
+  # JOB 1: Lint
+  # ============================================
+  # Checks code style and formatting
   lint:
     runs-on: ubuntu-latest
     steps:
       - name: Get code
         uses: actions/checkout@v4
+
       - name: Cache dependencies
         id: cache
         uses: actions/cache@v4
         with:
+          # Cache the local node_modules folder (not ~/.npm)
+          # This skips npm ci entirely if cache hits
           path: node_modules
           key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install dependencies
+        # Only run if cache missed (no node_modules restored)
         if: steps.cache.outputs.cache-hit != 'true'
         run: npm ci
+
       - name: Lint code
         run: npm run lint
 
+  # ============================================
+  # JOB 2: Test
+  # ============================================
+  # Runs unit tests. Note: no 'needs: lint' so it runs IN PARALLEL with lint
+  # This saves time but means tests run even if lint fails
   test:
-             # Optional: wait for lint to pass first
     runs-on: ubuntu-latest
     steps:
       - name: Get code
         uses: actions/checkout@v4
+
       - name: Cache dependencies
         id: cache
         uses: actions/cache@v4
         with:
+          # Cache the global npm cache (~/.npm), not node_modules
+          # npm ci will still run but use cached packages for faster install
           path: ~/.npm
           key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
+
       - name: Test code
+        # continue-on-error: true means this step shows green checkmark
+        # even if tests fail. The job itself succeeds, allowing build to run.
+        # WARNING: This can hide real test failures!
         continue-on-error: true
         id: run-tests
         run: npm run test
+
       - name: Upload test report
-           # ✅ Only upload when tests fail
+        # BUG: This step has NO 'if' condition, so it ALWAYS runs
+        # It should be: if: failure() && steps.run-tests.outcome == 'failure'
+        # Otherwise it uploads even when tests pass (wastes storage)
         uses: actions/upload-artifact@v4
         with:
           name: test-report
           path: test.json
 
+  # ============================================
+  # JOB 3: Build
+  # ============================================
+  # Compiles the production bundle
   build:
-    needs: test
+    needs: test          # Wait for test job to complete (even if tests "failed" due to continue-on-error)
     runs-on: ubuntu-latest
     steps:
       - name: Get code
         uses: actions/checkout@v4
+
       - name: Cache dependencies
         id: cache
         uses: actions/cache@v4
         with:
           path: node_modules
           key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: npm ci
+
       - name: Build website
         id: build-website
         run: npm run build
+
       - name: Upload artifacts
+        # Upload the dist folder so deploy job can download it
         uses: actions/upload-artifact@v4
         with:
           name: dist-files
           path: dist
 
+  # ============================================
+  # JOB 4: Deploy
+  # ============================================
+  # Downloads build artifacts and deploys
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -78,16 +118,28 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dist-files
+
       - name: Output contents
         run: ls
+
       - name: Deploy
         run: echo "Deploying..."
+
+  # ============================================
+  # JOB 5: Report (Failure Notification)
+  # ============================================
+  # This job only runs if ANY of its needed jobs failed
+  # It runs in parallel with deploy, not after it
   report:
-    needs: [lint, deploy]
+    needs: [lint, deploy]    # Wait for both lint and deploy
+    # failure() returns true if ANY previous job in the workflow failed
+    # This includes jobs that are NOT in 'needs' (e.g., if test failed)
     if: failure()
     runs-on: ubuntu-latest
     steps:
       - name: Output information
         run: |
-          echo "Somethig went wrong"
-          echo "${{ toJSON(github)  }}" 
+          echo "Something went wrong"
+          # toJSON(github) dumps the entire GitHub context object
+          # Useful for debugging: contains repo info, event data, actor, etc.
+          echo "${{ toJSON(github) }}"

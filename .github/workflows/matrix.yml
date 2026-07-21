@@ -1,27 +1,46 @@
 name: Matrix Demo
+# Trigger: run on every push to any branch
 on: push
+
 jobs:
     build:
+        # fail-fast: false means if one matrix combination fails,
+        # the others keep running. Default is true (cancels all).
         strategy:
-            fail-fast: false          # ✅ Optional: don't cancel other jobs if one fails
+            fail-fast: false
             matrix:
-                node-version: [12, 14, 16]        # ✅ Fixed typo: "verson" → "version"
+                # Define two dimensions for the matrix
+                node-version: [12, 14, 16]
                 operating-system: [ubuntu-latest, windows-latest]
+                
+                # INCLUDE: Add extra combinations beyond the Cartesian product
+                # Normally matrix produces: 12×ubuntu, 12×windows, 14×ubuntu, 14×windows, 16×ubuntu, 16×windows
+                # This adds: 18×ubuntu as an extra job
                 include:
                     - node-version: 18
                       operating-system: ubuntu-latest  
+                
+                # EXCLUDE: Remove specific combinations from the matrix
+                # Removes: 12×windows (Node 12 on Windows is not supported/tested)
                 exclude:
                     - node-version: 12
                       operating-system: windows-latest  
+
+        # Dynamic runner selection based on matrix variable
         runs-on: ${{ matrix.operating-system }}
+        
         steps:
             - name: Get Code
               uses: actions/checkout@v4
+
             - name: Install nodeJS
               uses: actions/setup-node@v3
               with:
-                node-version: ${{ matrix.node-version }}   # ✅ Fixed typo
+                # Inject the current matrix value into the action input
+                node-version: ${{ matrix.node-version }}
+
             - name: Install Dependencies
               run: npm ci
+
             - name: Build project
               run: npm run build

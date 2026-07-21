@@ -1,34 +1,55 @@
 name: Reusable Deploy
+# This workflow is NOT triggered by events directly
+# It must be called by another workflow using 'uses:'
 on:
     workflow_call:
+        # INPUTS: Parameters passed by the caller workflow
         inputs:
             artifact-name:
                 description: The name of the deployable artifact files
-                required: false
-                default: dist
-                type: string
+                required: false          # Optional parameter
+                default: dist            # Default if caller doesn't specify
+                type: string             # Must be string, number, or boolean
+        
+        # OUTPUTS: Values returned to the caller workflow
         outputs:
             result:
                 description: The result of the deployment operation
+                # Map the job output to workflow output
+                # jobs.deploy.outputs.outcome refers to the job-level output defined below
                 value: ${{ jobs.deploy.outputs.outcome }}
+        
+        # SECRETS: Can accept secrets from caller (commented out example)
         #secrets:
-         #   some-secret:
-          #      required: false
+        #    some-secret:
+        #        required: false
 
 jobs:
     deploy:
+        # JOB-LEVEL OUTPUT: Expose step output to the whole job
+        # This allows workflow_call.outputs to access it
         outputs:
             outcome: ${{ steps.set-result.outputs.step-result }}
+        
         runs-on: ubuntu-latest
+        
         steps: 
             - name: Get Code
+              # Download artifacts produced by the caller workflow
               uses: actions/download-artifact@v4
               with: 
+                # Use the input parameter passed by the caller
                 name: ${{ inputs.artifact-name }}
+
             - name: List files
               run: ls  
+
             - name: Output information
               run: echo "Deploying & Uploading ..."  
+
             - name: Set result output
               id: set-result  
-              run: echo "::set-output name=step-result::success"  
+              # STEP-LEVEL OUTPUT: Set a variable for later steps/jobs to read
+              # Syntax: ::set-output name=<name>::<value>
+              # Modern alternative: echo "step-result=success" >> $GITHUB_OUTPUT
+              run: echo "::set-output name=step-result::success"
