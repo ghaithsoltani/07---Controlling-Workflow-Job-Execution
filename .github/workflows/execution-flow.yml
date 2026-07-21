@@ -19,7 +19,9 @@ jobs:
         run: npm ci
       - name: Lint code
         run: npm run lint
+
   test:
+    needs: lint          # Optional: wait for lint to pass first
     runs-on: ubuntu-latest
     steps:
       - name: Get code
@@ -35,13 +37,13 @@ jobs:
       - name: Test code
         id: run-tests
         run: npm run test
-        
-        if: steps.run-tests.outcome == 'failure'
       - name: Upload test report
+        if: failure() && steps.run-tests.outcome == 'failure'   # ✅ Only upload when tests fail
         uses: actions/upload-artifact@v4
         with:
           name: test-report
           path: test.json
+
   build:
     needs: test
     runs-on: ubuntu-latest
@@ -64,6 +66,7 @@ jobs:
         with:
           name: dist-files
           path: dist
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
