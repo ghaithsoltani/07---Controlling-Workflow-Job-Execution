@@ -2,10 +2,10 @@ name: Matrix Demo
 on: push
 jobs:
     build:
-        continue-on-error: true
-        strategy: 
+        strategy:
+            fail-fast: false          # ✅ Optional: don't cancel other jobs if one fails
             matrix:
-                node-verson: [12, 14, 16]
+                node-version: [12, 14, 16]        # ✅ Fixed typo: "verson" → "version"
                 operating-system: [ubuntu-latest, windows-latest]
                 include:
                     - node-version: 18
@@ -20,8 +20,8 @@ jobs:
             - name: Install nodeJS
               uses: actions/setup-node@v3
               with:
-                node-version: ${{ matrix.node-verson }}
+                node-version: ${{ matrix.node-version }}   # ✅ Fixed typo
             - name: Install Dependencies
               run: npm ci
             - name: Build project
-              run: npm run build      
+              run: npm run build
